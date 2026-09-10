@@ -6,6 +6,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.parser import IAMPolicyParser
+from analyzers.privesc import PrivilegeEscalationDetector
 
 console = Console()
 
@@ -37,31 +38,49 @@ def main():
         sys.exit(1)
 
     statements = IAMPolicyParser.extract_statements(policy_doc)
-    console.print(f"[*] Extracted [bold green]{len(statements)}[/bold green] statement blocks. Auditing wildcard boundaries...")
+    console.print(f"[*] Extracted [bold green]{len(statements)}[/bold green] statement blocks.")
 
-    findings = IAMPolicyParser.audit_wildcards(statements)
+    # 1. Wildcard Check
+    wildcard_findings = IAMPolicyParser.audit_wildcards(statements)
+    w_table = Table(title="[bold cyan]🔍 Wildcard & Surface Exposure[/bold cyan]", border_style="cyan")
+    w_table.add_column("Statement Index", justify="center", style="dim")
+    w_table.add_column("Issue Type", justify="center", style="magenta")
+    w_table.add_column("Severity", justify="center")
+    w_table.add_column("Description", style="yellow")
 
-    table = Table(title="[bold cyan]🔍 IAM Policy Wildcard & Surface Exposure Findings[/bold cyan]", border_style="cyan")
-    table.add_column("Statement Index", justify="center", style="dim")
-    table.add_column("Issue Type", justify="center", style="magenta")
-    table.add_column("Severity", justify="center")
-    table.add_column("Security Finding / Anti-Pattern Description", style="yellow")
-
-    if not findings:
-        table.add_row("-", "CLEAN", "[bold green]INFORMATIONAL[/bold green]", "No full wildcards or open administrative access paths detected.")
+    if not wildcard_findings:
+        w_table.add_row("-", "CLEAN", "[bold green]INFORMATIONAL[/bold green]", "No unrestricted wildcard grants detected.")
     else:
-        for f in findings:
-            sev = f["severity"]
-            sev_str = f"[bold red]{sev}[/bold red]" if sev == "CRITICAL" else f"[bold yellow]{sev}[/bold yellow]"
-            table.add_row(
-                str(f["statement_index"]),
-                f["issue"],
-                sev_str,
-                f["description"]
-            )
+        for f in wildcard_findings:
+            sev_str = f"[bold red]{f['severity']}[/bold red]" if f['severity'] == "CRITICAL" else f"[bold yellow]{f['severity']}[/bold yellow]"
+            w_table.add_row(str(f["statement_index"]), f["issue"], sev_str, f["description"])
+    console.print(w_table)
+    console.print()
 
-    console.print(table)
-    console.print("\n[bold green]✔ Day 1 Complete:[/bold green] IAM syntax normalizer and wildcard detection operational.")
+    # 2. Privilege Escalation Check
+    privesc_findings = PrivilegeEscalationDetector.scan_for_privesc(statements)
+    p_table = Table(title="[bold red]🚨 Viable AWS Privilege Escalation Attack Paths (MITRE ATT&CK T1548)[/bold red]", border_style="red")
+    p_table.add_column("Rule ID", justify="center", style="cyan")
+    p_table.add_column("Attack Vector Name", style="white")
+    p_table.add_column("MITRE ID", justify="center", style="magenta")
+    p_table.add_column("Severity", justify="center")
+    p_table.add_column("Exploitation Mechanism", style="yellow")
+
+    if not privesc_findings:
+        p_table.add_row("-", "No PrivEsc Vectors", "N/A", "[bold green]SAFE[/bold green]", "Granted actions do not allow elevation to AdministratorAccess.")
+    else:
+        for p in privesc_findings:
+            sev_str = f"[bold red]{p['severity']}[/bold red]" if p['severity'] == "CRITICAL" else f"[bold yellow]{p['severity']}[/bold yellow]"
+            p_table.add_row(
+                p["id"],
+                p["name"],
+                p["mitre_id"],
+                sev_str,
+                p["description"]
+            )
+    console.print(p_table)
+
+    console.print("\n[bold green]✔ Day 2 Complete:[/bold green] Privilege escalation detection matrix and rule correlation verified.")
 
 if __name__ == "__main__":
     main()
