@@ -9,7 +9,7 @@ A Cloud Infrastructure Entitlement Management (CIEM) and privilege escalation an
 - [x] **Day 1: Project Setup, IAM Normalizer & Wildcard Audit Engine**
 - [x] **Day 2: Privilege Escalation Attack Vector Detection Matrix**
 - [x] **Day 3: Quantitative Blast Radius Impact & Data Exposure Scorer**
-- [ ] **Day 4: Automated Least-Privilege Scoped Policy Synthesizer**
+- [x] **Day 4: Automated Least-Privilege Scoped Policy Synthesizer**
 - [ ] **Day 5: Live AWS Account Boto3 Ingestion, Interactive UI & HTML Audit Report**
 
 ---

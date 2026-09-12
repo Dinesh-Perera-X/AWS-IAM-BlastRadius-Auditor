@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "HardenedStatement1ReadOps",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "cloudwatch:GetMetricData",
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "HardenedStatement2",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "ec2:RunInstances",
+        "lambda:CreateFunction",
+        "lambda:InvokeFunction"
+      ],
+      "Resource": [
+        "arn:aws:s3:::REPLACE_WITH_SPECIFIC_BUCKET",
+        "arn:aws:s3:::REPLACE_WITH_SPECIFIC_BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "HardenedStatement3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::REPLACE_WITH_SPECIFIC_BUCKET",
+        "arn:aws:s3:::REPLACE_WITH_SPECIFIC_BUCKET/*"
+      ]
+    }
+  ]
+}

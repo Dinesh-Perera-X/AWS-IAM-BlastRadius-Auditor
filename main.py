@@ -1,13 +1,16 @@
 import argparse
 import sys
 import os
+import json
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.syntax import Syntax
 
 from core.parser import IAMPolicyParser
 from analyzers.privesc import PrivilegeEscalationDetector
 from analyzers.blast_radius import BlastRadiusScorer
+from generators.synthesizer import PolicySynthesizer
 
 console = Console()
 
@@ -23,6 +26,8 @@ def main():
         description="Audit AWS IAM policies for privilege escalation risks and wildcard anti-patterns."
     )
     parser.add_argument("-p", "--policy", help="Path to local IAM policy JSON file", default="policies/compromised_dev_role.json")
+    parser.add_argument("--remediate", action="store_true", help="Synthesize and export least-privilege replacement policy")
+    parser.add_argument("-o", "--output", help="Path to write remediated policy JSON", default="policies/remediated_policy.json")
     args = parser.parse_args()
 
     display_banner()
@@ -91,7 +96,17 @@ def main():
     )
     console.print(r_panel)
 
-    console.print("\n[bold green]✔ Day 3 Complete:[/bold green] Blast radius calculation engine and impact assessment verified.")
+    # 4. Remediation Synthesizer
+    if args.remediate:
+        remediated_doc = PolicySynthesizer.generate_least_privilege(policy_doc, privesc_findings)
+        PolicySynthesizer.export_remediated_policy(remediated_doc, args.output)
+        
+        console.print(f"\n[bold green]✔ Hardened Least-Privilege IAM Policy Synthesized:[/bold green] [cyan]{args.output}[/cyan]")
+        json_str = json.dumps(remediated_doc, indent=2)
+        syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
+        console.print(Panel(syntax, title="[bold green]🛡️ Scoped Least-Privilege IAM Replacement Policy[/bold green]", border_style="green"))
+
+    console.print("\n[bold green]✔ Day 4 Complete:[/bold green] Automated least-privilege synthesizer and policy hardening operational.")
 
 if __name__ == "__main__":
     main()
