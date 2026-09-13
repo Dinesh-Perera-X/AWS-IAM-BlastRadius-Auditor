@@ -8,9 +8,11 @@ from rich.table import Table
 from rich.syntax import Syntax
 
 from core.parser import IAMPolicyParser
+from core.boto3_collector import LiveIAMCollector
 from analyzers.privesc import PrivilegeEscalationDetector
 from analyzers.blast_radius import BlastRadiusScorer
 from generators.synthesizer import PolicySynthesizer
+from reports.reporter import BlastRadiusReporter
 
 console = Console()
 
@@ -23,24 +25,37 @@ def display_banner():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Audit AWS IAM policies for privilege escalation risks and wildcard anti-patterns."
+        description="Audit AWS IAM policies for privilege escalation risks, blast radius impact, and least privilege."
     )
     parser.add_argument("-p", "--policy", help="Path to local IAM policy JSON file", default="policies/compromised_dev_role.json")
+    parser.add_argument("--role-name", help="Live AWS IAM Role name to audit via Boto3")
     parser.add_argument("--remediate", action="store_true", help="Synthesize and export least-privilege replacement policy")
     parser.add_argument("-o", "--output", help="Path to write remediated policy JSON", default="policies/remediated_policy.json")
+    parser.add_argument("--json", help="Export audit results to JSON", default="iam_blast_radius_report.json")
+    parser.add_argument("--html", help="Export visual HTML audit dossier", default="iam_blast_radius_dossier.html")
     args = parser.parse_args()
 
     display_banner()
 
-    if not os.path.exists(args.policy):
-        console.print(f"[red][!] Error: Policy file '{args.policy}' not found.[/red]")
-        sys.exit(1)
+    target_name = args.policy
+    policy_doc = None
 
-    console.print(f"[*] Ingesting and parsing IAM Policy Document: [cyan]{args.policy}[/cyan]\n")
+    if args.role_name:
+        target_name = f"AWS IAM Role: {args.role_name}"
+        console.print(f"[*] Querying live AWS account for IAM Role: [cyan]{args.role_name}[/cyan]...")
+        policy_doc = LiveIAMCollector.fetch_role_policy(args.role_name)
+        if not policy_doc:
+            console.print("[dim yellow][!] Live fetch unavailable or role not found. Falling back to local policy file.[/dim yellow]")
+            policy_doc = IAMPolicyParser.load_policy_file(args.policy)
+    else:
+        if not os.path.exists(args.policy):
+            console.print(f"[red][!] Error: Policy file '{args.policy}' not found.[/red]")
+            sys.exit(1)
+        console.print(f"[*] Ingesting and parsing IAM Policy Document: [cyan]{args.policy}[/cyan]\n")
+        policy_doc = IAMPolicyParser.load_policy_file(args.policy)
 
-    policy_doc = IAMPolicyParser.load_policy_file(args.policy)
     if not policy_doc:
-        console.print("[red][!] Failed to parse JSON policy document.[/red]")
+        console.print("[red][!] Failed to load valid JSON policy document.[/red]")
         sys.exit(1)
 
     statements = IAMPolicyParser.extract_statements(policy_doc)
@@ -96,17 +111,29 @@ def main():
     )
     console.print(r_panel)
 
+    # Compile Audit Results
+    audit_summary = {
+        "target": target_name,
+        "blast_radius": radius,
+        "wildcard_findings": wildcard_findings,
+        "privesc_findings": privesc_findings
+    }
+
     # 4. Remediation Synthesizer
     if args.remediate:
         remediated_doc = PolicySynthesizer.generate_least_privilege(policy_doc, privesc_findings)
         PolicySynthesizer.export_remediated_policy(remediated_doc, args.output)
-        
         console.print(f"\n[bold green]✔ Hardened Least-Privilege IAM Policy Synthesized:[/bold green] [cyan]{args.output}[/cyan]")
-        json_str = json.dumps(remediated_doc, indent=2)
-        syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
-        console.print(Panel(syntax, title="[bold green]🛡️ Scoped Least-Privilege IAM Replacement Policy[/bold green]", border_style="green"))
 
-    console.print("\n[bold green]✔ Day 4 Complete:[/bold green] Automated least-privilege synthesizer and policy hardening operational.")
+    # 5. Export Reports
+    if args.json:
+        BlastRadiusReporter.export_json(audit_summary, args.json)
+        console.print(f"[green]✔ Structured JSON SIEM Telemetry Exported:[/green] [cyan]{args.json}[/cyan]")
+    if args.html:
+        BlastRadiusReporter.export_html(audit_summary, args.html)
+        console.print(f"[green]✔ Visual HTML Audit Dossier Exported:[/green] [cyan]{args.html}[/cyan]")
+
+    console.print("\n[bold green]✔ Day 5 Complete:[/bold green] AWS IAM Blast Radius & Least-Privilege Auditor fully finalized.")
 
 if __name__ == "__main__":
     main()
